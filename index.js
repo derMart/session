@@ -16,7 +16,7 @@ var crc = require('crc').crc32;
 var debug = require('debug')('express-session');
 var deprecate = require('depd')('express-session');
 var parseUrl = require('parseurl');
-var uid = require('uid-safe').sync
+var uid = require('uid-safe')
   , onHeaders = require('on-headers')
   , signature = require('cookie-signature')
 
@@ -123,10 +123,14 @@ function session(options){
   }
 
   // generates the new session
-  store.generate = function(req){
-    req.sessionID = generateId(req);
-    req.session = new Session(req);
-    req.session.cookie = new Cookie(cookie);
+  store.generate = function(req, callback) {
+    generateId(req, function(err, sessionID) {
+      if (err) throw err;
+      req.sessionID = sessionID;
+      req.session = new Session(req);
+      req.session.cookie = new Cookie(cookie);
+      callback && callback(req);
+    });
   };
 
   var storeImplementsTouch = typeof store.touch === 'function';
@@ -298,11 +302,13 @@ function session(options){
     };
 
     // generate the session
-    function generate() {
-      store.generate(req);
-      originalId = req.sessionID;
-      originalHash = hash(req.session);
-      wrapmethods(req.session);
+    function generate(callback) {
+      store.generate(req, function(req) {
+        originalId = req.sessionID;
+        originalHash = hash(req.session);
+        wrapmethods(req.session);
+        callback && callback();
+      });
     }
 
     // wrap session methods

@@ -441,8 +441,8 @@ function session(options){
  * @private
  */
 
-function generateSessionId(sess) {
-  return uid(24);
+function generateSessionId(sess, callback) {
+  return uid(24, callback);
 }
 
 /**

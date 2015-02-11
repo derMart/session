@@ -124,7 +124,15 @@ function session(options){
 
   // generates the new session
   store.generate = function(req, callback) {
-    generateId(req, function(err, sessionID) {
+    //backward compatibility
+    var args = /function.*?\(([^\)]*)\)/.exec(generateId.toString())[1].split(',');
+    if (args.length < 2) {
+      var _generateId = generateId;
+      generateId = function(req, cb) {
+        cb(null, _generateId(req));
+      };
+    }
+    generateId.call(store, req, function(err, sessionID) {
       if (err) throw err;
       req.sessionID = sessionID;
       req.session = new Session(req);

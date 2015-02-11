@@ -388,8 +388,9 @@ function session(options){
     // generate a session if the browser doesn't send a sessionID
     if (!req.sessionID) {
       debug('no SID sent, generating session');
-      generate();
-      next();
+      generate(function(){
+        next();
+      });
       return;
     }
 
@@ -405,11 +406,15 @@ function session(options){
           return;
         }
 
-        generate();
+        generate(function(){
+          next();
+        });
       // no session
       } else if (!sess) {
         debug('no session found');
-        generate();
+        generate(function(){
+          next();
+        });
       // populate req.session
       } else {
         debug('session found');
@@ -422,9 +427,9 @@ function session(options){
         }
 
         wrapmethods(req.session);
-      }
 
-      next();
+        next();
+      }
     });
   };
 };

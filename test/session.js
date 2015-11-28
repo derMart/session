@@ -638,6 +638,67 @@ describe('session()', function(){
     })
   })
 
+  describe('cookie option', function () {
+    describe('when "secure" set to "auto"', function () {
+      describe('when "proxy" is "true"', function () {
+        before(function () {
+          this.server = createServer({ proxy: true, cookie: { maxAge: 5, secure: 'auto' }})
+        })
+
+        it('should set secure when X-Forwarded-Proto is https', function (done) {
+          request(this.server)
+          .get('/')
+          .set('X-Forwarded-Proto', 'https')
+          .expect(shouldSetCookie('connect.sid'))
+          .expect(shouldSetSecureCookie('connect.sid'))
+          .expect(200, done)
+        })
+      })
+
+      describe('when "proxy" is "false"', function () {
+        before(function () {
+          this.server = createServer({ proxy: false, cookie: { maxAge: 5, secure: 'auto' }})
+        })
+
+        it('should not set secure when X-Forwarded-Proto is https', function (done) {
+          request(this.server)
+          .get('/')
+          .set('X-Forwarded-Proto', 'https')
+          .expect(shouldSetCookie('connect.sid'))
+          .expect(shouldNotSetSecureCookie('connect.sid'))
+          .expect(200, done)
+        })
+      })
+
+      describe('when "proxy" is undefined', function() {
+        before(function () {
+          this.app = express()
+            .use(function(req, res, next) { Object.defineProperty(req, 'secure', { value: JSON.parse(req.headers['x-secure']) }); next(); })
+            .use(session({ secret: 'keyboard cat', cookie: { maxAge: min, secure: 'auto' }}))
+            .use(function(req, res) { res.json(req.secure); });
+        })
+
+        it('should set secure if req.secure = true', function (done) {
+          request(this.app)
+          .get('/')
+          .set('X-Secure', 'true')
+          .expect(shouldSetCookie('connect.sid'))
+          .expect(shouldSetSecureCookie('connect.sid'))
+          .expect(200, 'true', done)
+        })
+
+        it('should not set secure if req.secure = false', function (done) {
+          request(this.app)
+          .get('/')
+          .set('X-Secure', 'false')
+          .expect(shouldSetCookie('connect.sid'))
+          .expect(shouldNotSetSecureCookie('connect.sid'))
+          .expect(200, 'false', done)
+        })
+      })
+    })
+  })
+
   describe('genid option', function(){
     it('should reject non-function values', function(){
       assert.throws(session.bind(null, { genid: 'bogus!' }), /genid.*must/)
@@ -1009,6 +1070,74 @@ describe('session()', function(){
       .expect(200, cb)
     })
   });
+
+  describe('secret option', function () {
+    it('should reject empty arrays', function () {
+      assert.throws(createServer.bind(null, { secret: [] }), /secret option array/);
+    })
+
+    describe('when an array', function () {
+      it('should sign cookies', function (done) {
+        var server = createServer({ secret: ['keyboard cat', 'nyan cat'] }, function (req, res) {
+          req.session.user = 'bob';
+          res.end(req.session.user);
+        });
+
+        request(server)
+        .get('/')
+        .expect(shouldSetCookie('connect.sid'))
+        .expect(200, 'bob', done);
+      })
+
+      it('should sign cookies with first element', function (done) {
+        var store = new session.MemoryStore();
+
+        var server1 = createServer({ secret: ['keyboard cat', 'nyan cat'], store: store }, function (req, res) {
+          req.session.user = 'bob';
+          res.end(req.session.user);
+        });
+
+        var server2 = createServer({ secret: 'nyan cat', store: store }, function (req, res) {
+          res.end(String(req.session.user));
+        });
+
+        request(server1)
+        .get('/')
+        .expect(shouldSetCookie('connect.sid'))
+        .expect(200, 'bob', function (err, res) {
+          if (err) return done(err);
+          request(server2)
+          .get('/')
+          .set('Cookie', cookie(res))
+          .expect(200, 'undefined', done);
+        });
+      });
+
+      it('should read cookies using all elements', function (done) {
+        var store = new session.MemoryStore();
+
+        var server1 = createServer({ secret: 'nyan cat', store: store }, function (req, res) {
+          req.session.user = 'bob';
+          res.end(req.session.user);
+        });
+
+        var server2 = createServer({ secret: ['keyboard cat', 'nyan cat'], store: store }, function (req, res) {
+          res.end(String(req.session.user));
+        });
+
+        request(server1)
+        .get('/')
+        .expect(shouldSetCookie('connect.sid'))
+        .expect(200, 'bob', function (err, res) {
+          if (err) return done(err);
+          request(server2)
+          .get('/')
+          .set('Cookie', cookie(res))
+          .expect(200, 'bob', done);
+        });
+      });
+    })
+  })
 
   describe('unset option', function () {
     it('should reject unknown values', function(){
@@ -1667,7 +1796,7 @@ describe('session()', function(){
 
             val = cookie(res);
 
-            assert.ok(delta > 1000 && delta < 2000)
+            assert.ok(delta > 1000 && delta <= 2000)
             done();
           });
         });
@@ -1683,7 +1812,7 @@ describe('session()', function(){
 
             val = cookie(res);
 
-            assert.ok(delta > 4000 && delta < 5000)
+            assert.ok(delta > 4000 && delta <= 5000)
             done();
           });
         });
@@ -1699,7 +1828,7 @@ describe('session()', function(){
 
             val = cookie(res);
 
-            assert.ok(delta > 2999999000 && delta < 3000000000)
+            assert.ok(delta > 2999999000 && delta <= 3000000000)
             done();
           });
         });
@@ -1741,6 +1870,53 @@ describe('session()', function(){
               var val = cookie(res);
               assert.equal(val.indexOf('Expires'), -1, 'should be not have cookie Expires')
               done();
+            });
+          })
+
+          it('should not reset cookie', function (done) {
+            var server = createServer(null, function (req, res) {
+              req.session.cookie.expires = null;
+              res.end();
+            });
+
+            request(server)
+            .get('/')
+            .expect(200, function (err, res) {
+              if (err) return done(err);
+              var val = cookie(res);
+              assert.equal(val.indexOf('Expires'), -1, 'should be not have cookie Expires')
+              request(server)
+              .get('/')
+              .set('Cookie', val)
+              .expect(200, function (err, res) {
+                if (err) return done(err);
+                assert.ok(!cookie(res));
+                done();
+              });
+            });
+          })
+
+          it('should not reset cookie when modified', function (done) {
+            var server = createServer(null, function (req, res) {
+              req.session.cookie.expires = null;
+              req.session.hit = (req.session.hit || 0) + 1;
+              res.end();
+            });
+
+            request(server)
+            .get('/')
+            .expect(200, function (err, res) {
+              if (err) return done(err);
+              var val = cookie(res);
+              assert.equal(val.indexOf('Expires'), -1, 'should be not have cookie Expires')
+              request(server)
+              .get('/')
+              .set('Cookie', val)
+              .expect(200, function (err, res) {
+                if (err) return done(err);
+                assert.ok(!cookie(res));
+                done();
+              });
             });
           })
         })
@@ -1940,6 +2116,15 @@ function shouldNotHaveHeader(header) {
   }
 }
 
+function shouldNotSetSecureCookie(name) {
+  return function (res) {
+    var header = cookie(res)
+    assert.ok(header, 'should have a cookie header')
+    assert.equal(header.split('=')[0], name, 'should set cookie ' + name)
+    assert.ok(header.toLowerCase().split(/; */).every(function (k) { return k !== 'secure'; }), 'should not set secure cookie')
+  }
+}
+
 function shouldSetCookie(name) {
   return function (res) {
     var header = cookie(res)
@@ -1954,6 +2139,15 @@ function shouldSetCookieToValue(name, val) {
     assert.ok(header, 'should have a cookie header')
     assert.equal(header.split('=')[0], name, 'should set cookie ' + name)
     assert.equal(header.split('=')[1].split(';')[0], val, 'should set cookie ' + name + ' to ' + val)
+  }
+}
+
+function shouldSetSecureCookie(name) {
+  return function (res) {
+    var header = cookie(res)
+    assert.ok(header, 'should have a cookie header')
+    assert.equal(header.split('=')[0], name, 'should set cookie ' + name)
+    assert.ok(header.toLowerCase().split(/; */).some(function (k) { return k === 'secure'; }), 'should set secure cookie')
   }
 }
 

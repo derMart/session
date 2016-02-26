@@ -1,3 +1,19 @@
+1.13.1 / 2016-01-29
+===================
+
+  * deps: parseurl@~1.3.1
+    - perf: enable strict mode
+  * deps: uid-safe@~2.1.0
+    - Use `random-bytes` for byte source
+  * perf: enable strict mode
+
+1.13.0 / 2016-01-10
+===================
+
+  * Fix `rolling: true` to not set cookie when no session exists
+    - Better `saveUninitialized: false` + `rolling: true` behavior
+  * deps: crc@3.4.0
+
 1.12.1 / 2015-10-29
 ===================
 

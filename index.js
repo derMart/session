@@ -151,7 +151,7 @@ function session(options){
       if (err) throw err;
       req.sessionID = sessionID;
       req.session = new Session(req);
-      req.session.cookie = new Cookie(cookie);
+      req.session.cookie = new Cookie(cookieOptions);
 
       if (cookieOptions.secure === 'auto') {
         req.session.cookie.secure = issecure(req, trustProxy);

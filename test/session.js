@@ -786,6 +786,15 @@ describe('session()', function(){
       .expect(200, done)
     });
 
+    it('should allow custom async function', function(done){
+      function genid(req, cb) { cb(null,'apple'); }
+
+      request(createServer({ genid: genid }))
+      .get('/')
+      .expect(shouldSetCookieToValue('connect.sid', 's%3Aapple.D8Y%2BpkTAmeR0PobOhY4G97PRW%2Bj7bUnP%2F5m6%2FOn1MCU'))
+      .expect(200, done)
+    });
+
     it('should encode unsafe chars', function(done){
       function genid() { return '%' }
 
@@ -803,6 +812,18 @@ describe('session()', function(){
       .expect(shouldSetCookieToValue('connect.sid', 's%3A%2Ffoo.paEKBtAHbV5s1IB8B2zPnzAgYmmnRPIqObW4VRYj%2FMQ'))
       .expect(200, done)
     });
+
+    it('should provide store to custom async function', function(done){
+      var store = new session.MemoryStore()
+
+      function genid(req, cb) { assert(this===store); cb(null,'apple'); }
+
+      request(createServer({ genid: genid, store:store }))
+      .get('/')
+      .expect(shouldSetCookieToValue('connect.sid', 's%3Aapple.D8Y%2BpkTAmeR0PobOhY4G97PRW%2Bj7bUnP%2F5m6%2FOn1MCU'))
+      .expect(200, done)
+    });
+
   });
 
   describe('key option', function(){

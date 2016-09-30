@@ -50,8 +50,9 @@ util.inherits(Store, EventEmitter)
 Store.prototype.regenerate = function(req, fn){
   var self = this;
   this.destroy(req.sessionID, function(err){
-    self.generate(req);
-    fn(err);
+    self.generate(req, function(req) {
+      fn(err);
+    });
   });
 };
 
